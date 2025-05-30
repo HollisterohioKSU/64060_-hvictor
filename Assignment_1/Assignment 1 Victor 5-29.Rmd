@@ -1,0 +1,67 @@
+---
+title: "Assignment 1 Fundamentals of Machine Learning: Titanic Data Set"
+Author: "Hollister Victor"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+In this assignment I analyze the Titanic Data Set using R.Below shows Importing of the data and cleaning out the NA data , calculate descriptive statistics , transform variables and create visualizations as part of the requirements for Assignment 1
+
+# Introduction
+
+## Load Required Libraries
+
+```{r}
+
+library(readr)
+library(ggplot2)
+library(tidyr)
+
+
+## Download and Import Dataset
+
+dataset_url <- "https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv"#Download data set
+titanic_data <- read_csv(dataset_url) #Import the data set to R
+
+## Handle Missing Values NA rows removed to ensure accurate statistical calculation. 
+ 
+
+## Descriptive Statistics
+titanic_data<-drop_na((titanic_data))
+summary(titanic_data$Age) #Print out descriptive statistics for a selection of quantitative and categorical variables
+summary(titanic_data$Fare)
+summary(titanic_data$SibSp)
+#Mean and sd for the quantitative variables
+mean(titanic_data$Age)
+sd(titanic_data$Age)
+mean(titanic_data$Fare)
+sd(titanic_data$Fare)
+
+### Categorical Variables
+#frequency counts - descriptive statistics for categorical variables
+table(titanic_data$Sex)
+table(titanic_data$Survived)
+table(titanic_data$Embarked)
+#Provide the propirtions-descriptive statistics for the categorical variables
+prop.table(table(titanic_data$Sex))
+prop.table(table(titanic_data$Survived))
+
+## Transform a Variable
+#Transform the numerical survival data to "yes" or "no"
+titanic_data$SurvivedLabel <- ifelse(titanic_data$Survived == 1, "Yes", "No")
+#showing the result
+
+### Histogram of Age
+table(titanic_data$SurvivedLabel)
+#histogram of age 
+ggplot(titanic_data,aes(x=Age))+geom_histogram(binwidth=5,fill="steelblue",color="white")+labs(title = "Distribution of Passenger Ages",x="Age",y="count")
+
+### Scatterplot: Age vs. Fare
+ggplot(titanic_data,aes(x=Age,y=Fare))+geom_point(color="darkgreen")+labs(title="Scatterplot of Age vs Fare",x="Age", y="Fare")
+```
+
+ ## Conclusion
+ This R Markdown document demonstrates how to work with a real-world dataset using R. I loaded and cleaned the Titanic dataset, summarized variables, transformed a column, and created visualizations. This assignment helped reinforce key data analysis skills in R and the Markdown documentation format.
+
+

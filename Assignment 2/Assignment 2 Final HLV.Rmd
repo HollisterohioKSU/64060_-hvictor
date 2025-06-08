@@ -1,0 +1,130 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(readr) # Loading of required libraries   readr- for csv files
+library(dplyr) # for data manipulation 
+library(caret) # for dummy variable creation and data partition
+library(class) # for KNN 
+library(ggplot2) # for plotting model accuracy
+
+#Read and Clean The Data Set 
+bank <- read_csv("/Users/hollyvictor/Downloads/UniversalBank.csv") %>%
+select(-ID, -`ZIP Code`)  # remove ID and ZIP predictors
+
+dummies <- dummyVars(`Personal Loan` ~ ., data = bank)  #Transform categorical predictors >two categories into dummy variables
+bank_transformed <- data.frame(predict(dummies, newdata = bank))
+bank_transformed$Personal_Loan <- bank$`Personal Loan`
+
+x_names <- setdiff(names(bank_transformed), "Personal_Loan")
+
+set.seed(123) #Partition the data into training (60%) and validation (40%) sets.
+train_index <- createDataPartition(bank_transformed$Personal_Loan, p = 0.6, list = FALSE)
+train_data <- bank_transformed[train_index, ]
+valid_data <- bank_transformed[-train_index, ]
+
+
+x_train <- train_data[, x_names] # Prepares the predictor matrix (X) and target vector (y) for modeling.
+y_train <- train_data$Personal_Loan
+x_valid <- valid_data[, x_names]
+y_valid <- valid_data$Personal_Loan
+
+#____ NEW CUSTOMER PREDICTION_____
+
+new_customer <- as.data.frame(matrix(0, nrow = 1, ncol = ncol(x_train)))  #creates new customer input row
+colnames(new_customer) <- colnames(x_train)
+
+safe_set <- function(df, column, value) {
+  if (column %in% colnames(df)) df[[column]] <- value
+  return(df)
+}
+
+new_customer <- safe_set(new_customer, "Age", 40)
+new_customer <- safe_set(new_customer, "Experience", 10)
+new_customer <- safe_set(new_customer, "Income", 84)
+new_customer <- safe_set(new_customer, "Family", 2)
+new_customer <- safe_set(new_customer, "CCAvg", 2)
+new_customer <- safe_set(new_customer, "Mortgage", 0)
+new_customer <- safe_set(new_customer, "Securities.Account", 0)
+new_customer <- safe_set(new_customer, "CD.Account", 0)
+new_customer <- safe_set(new_customer, "Online", 1)
+new_customer <- safe_set(new_customer, "CreditCard", 1)
+new_customer <- safe_set(new_customer, "Education.1", 0)
+new_customer <- safe_set(new_customer, "Education.2", 1)
+new_customer <- safe_set(new_customer, "Education.3", 0)
+
+stopifnot(identical(names(new_customer), names(x_train)))  #added this to ensure that new_customer has the same structure as x_train.  
+
+  
+prediction_k1 <- knn(train = x_train, test = new_customer, cl = y_train, k = 1)  #Perform a k-NN classification … using k = 1
+cat("Prediction for new customer with k=1:", prediction_k1, "\n")
+
+ 
+accuracy <- c()
+for (k in 1:20) {
+  pred <- knn(train = x_train, test = x_valid, cl = y_train, k = k) #What is a choice of k that balances between overfitting and ignoring predictor information?”
+  acc <- mean(pred == y_valid)
+  accuracy <- c(accuracy, acc)
+}
+
+
+plot(1:20, accuracy, type = "b", pch = 19, col = "blue",
+     xlab = "k", ylab = "Accuracy", main = "Validation Accuracy for k")  #visual respresenation to select best K 
+
+best_k <- which.max(accuracy)
+cat("Best k is:", best_k, "with accuracy:", round(accuracy[best_k], 4), "\n")  #Selects the value of k with the highest validation accuracy.
+
+
+pred_bestk <- knn(train = x_train, test = x_valid, cl = y_train, k = best_k)
+conf_matrix <- confusionMatrix(pred_bestk, as.factor(y_valid), positive = "1")  #Show the confusion matrix for the validation data that results from using the best k.
+print(conf_matrix)
+
+
+prediction_bestk <- knn(train = x_train, test = new_customer, cl = y_train, k = best_k)
+cat("Prediction for new customer with best k =", best_k, ":", prediction_bestk, "\n")  #Classify the customer using the best k
+
+set.seed(123)  #Repartition Data: 50/30/20 Train/Validation/Test Split
+train_index2 <- createDataPartition(bank_transformed$Personal_Loan, p = 0.5, list = FALSE)
+train_set <- bank_transformed[train_index2, ]
+temp_set <- bank_transformed[-train_index2, ]
+
+
+valid_index2 <- createDataPartition(temp_set$Personal_Loan, p = 0.6, list = FALSE)
+valid_set <- temp_set[valid_index2, ]
+test_set <- temp_set[-valid_index2, ]
+
+x_train2 <- train_set[, x_names]  #k-NN on All Three Sets with Best k.Compare the confusion matrix of the test set with that of the training and validation sets.”
+y_train2 <- train_set$Personal_Loan
+x_valid2 <- valid_set[, x_names]
+y_valid2 <- valid_set$Personal_Loan
+x_test2  <- test_set[, x_names]
+y_test2  <- test_set$Personal_Loan
+
+
+pred_train <- knn(train = x_train2, test = x_train2, cl = y_train2, k = best_k)
+pred_valid <- knn(train = x_train2, test = x_valid2, cl = y_train2, k = best_k)
+pred_test  <- knn(train = x_train2, test = x_test2, cl = y_train2, k = best_k)
+
+print(confusionMatrix(pred_train, as.factor(y_train2), positive = "1"))
+print(confusionMatrix(pred_valid, as.factor(y_valid2), positive = "1"))
+print(confusionMatrix(pred_test, as.factor(y_test2), positive = "1"))
+
+
+ 
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+

@@ -1,0 +1,125 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(readr)
+library(dplyr)
+library(caret)
+library(e1071)
+library(pROC)
+
+MyData <- read.csv("/Users/hollyvictor/Downloads/UniversalBank.csv", header = TRUE, stringsAsFactors = FALSE)
+
+# Remove unneeded columns (ID and ZIP Code)
+MyData <- MyData %>% select(-ID, -ZIP.Code)
+
+# Convert CreditCard, Online, and Personal.Loan to factors (for Naive Bayes)
+MyData$CreditCard <- as.factor(MyData$CreditCard)
+MyData$Online <- as.factor(MyData$Online)
+MyData$Personal.Loan <- as.factor(MyData$Personal.Loan)
+
+#Partition the data into training (60%) and validation (40%) sets.
+set.seed(123)
+Index_Train <- createDataPartition(MyData$Personal.Loan, p = 0.6, list = FALSE)
+Train <- MyData[Index_Train, ]
+Test  <- MyData[-Index_Train, ]
+
+# A. Create a pivot table for the training data
+Pivot_Table <- table(CC = Train$CreditCard,
+                     Online = Train$Online,
+                     Loan = Train$Personal.Loan)
+print(Pivot_Table)
+
+# B. Compute P(Loan = 1 | CC = 1, Online = 1) — Empirical estimate
+numerator <- Pivot_Table["1", "1", "1"]
+denominator <- Pivot_Table["1", "1", "1"] + Pivot_Table["1", "1", "0"]
+Empirical_Prob <- numerator / denominator
+cat("Empirical P(Loan = 1 | CC = 1, Online = 1):", round(Empirical_Prob, 4), "\n")
+
+# C. Create two separate pivot tables
+
+# Loan vs Online
+table_online <- table(Loan = Train$Personal.Loan, Online = Train$Online)
+print(table_online)
+
+# Loan vs Credit Card
+table_cc <- table(Loan = Train$Personal.Loan, CC = Train$CreditCard)
+print(table_cc)
+
+#D. Compute conditional probabilities
+
+# Contingency tables for conditional calculations
+Table_CC <- table(Loan = Train$Personal.Loan, CC = Train$CreditCard)
+Table_Online <- table(Loan = Train$Personal.Loan, Online = Train$Online)
+
+# i. P(CC = 1 | Loan = 1)
+P_CC1_given_Loan1 <- Table_CC["1", "1"] / sum(Table_CC["1", ])
+
+# ii. P(Online = 1 | Loan = 1)
+P_Online1_given_Loan1 <- Table_Online["1", "1"] / sum(Table_Online["1", ])
+
+# iii. P(Loan = 1)
+P_Loan1 <- mean(Train$Personal.Loan == "1")
+
+# iv. P(CC = 1 | Loan = 0)
+P_CC1_given_Loan0 <- Table_CC["0", "1"] / sum(Table_CC["0", ])
+
+# v. P(Online = 1 | Loan = 0)
+P_Online1_given_Loan0 <- Table_Online["0", "1"] / sum(Table_Online["0", ])
+
+# vi. P(Loan = 0)
+P_Loan0 <- 1 - P_Loan1
+
+# Print the results clearly
+cat("i.  P(CC = 1 | Loan = 1):", round(P_CC1_given_Loan1, 4), "\n")
+cat("ii. P(Online = 1 | Loan = 1):", round(P_Online1_given_Loan1, 4), "\n")
+cat("iii.P(Loan = 1):", round(P_Loan1, 4), "\n")
+cat("iv. P(CC = 1 | Loan = 0):", round(P_CC1_given_Loan0, 4), "\n")
+cat("v.  P(Online = 1 | Loan = 0):", round(P_Online1_given_Loan0, 4), "\n")
+cat("vi. P(Loan = 0):", round(P_Loan0, 4), "\n")
+
+
+#E. Compute Naive Bayes Probability: P(Loan = 1 | CC = 1, Online = 1)
+
+# Naive Bayes numerator and denominator
+# Numerator for Loan = 1
+Numerator <- P_CC1_given_Loan1 * P_Online1_given_Loan1 * P_Loan1
+
+# Denominator includes both Loan = 1 and Loan = 0 branches
+Denominator <- Numerator + (P_CC1_given_Loan0 * P_Online1_given_Loan0 * P_Loan0)
+
+# Final Naive Bayes probability
+NB_Prob <- Numerator / Denominator
+
+# F. Compare result to part B
+
+cat("Empirical P(Loan = 1 | CC = 1, Online = 1):", round(Empirical_Prob, 4), "\n")
+cat("Naive Bayes Estimate:", round(NB_Prob, 4), "\n")
+
+# G. Run Naive Bayes model and examine output
+NB_Model <- naiveBayes(Personal.Loan ~ CreditCard + Online, data = Train)
+# Predict probabilities on the training data
+NB_Preds <- predict(NB_Model, newdata = Train, type = "raw")
+
+# Find estimated probability for a hypothetical case: CC = 1, Online = 1
+newdata <- data.frame(CreditCard = factor(1, levels = c(0, 1)),
+                      Online = factor(1, levels = c(0, 1)))
+Predicted_Prob <- predict(NB_Model, newdata, type = "raw")
+cat("Model-based P(Loan = 1 | CC = 1, Online = 1):", round(Predicted_Prob[2], 4), "\n")
+ 
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+

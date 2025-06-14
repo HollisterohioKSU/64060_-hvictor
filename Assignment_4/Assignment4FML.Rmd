@@ -1,0 +1,125 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+#Global Chunk setting for knitting 
+knitr::opts_chunk$set(dev = "png", error = TRUE)
+
+#Load Required Libraries
+library(readr)              
+library(dplyr)
+library(ggplot2)
+library(cluster) 
+library(factoextra)
+library(flexclust)
+
+#Load Data set 
+pharma <- read_csv("/Users/hollyvictor/Downloads/Pharmaceuticals.csv")
+
+#Select Numeric Variables for the clustering 
+num_vars <- pharma %>%
+  select(Market_Cap, Beta, PE_Ratio, ROE, ROA,
+         Asset_Turnover, Leverage, Rev_Growth, Net_Profit_Margin)
+
+#scale numeric data
+num_scaled <- scale(num_vars)
+
+#visual the distance heat map 
+fviz_dist(dist(num_scaled)) +
+  labs(title = "Distance Matrix: Similarity Between Firms")
+
+#Determine optimal K 
+fviz_nbclust(num_scaled, kmeans, method = "wss") +
+  geom_vline(xintercept = 3, linetype = 2, color = "blue") +
+  labs(title = "Elbow Method: Optimal k")
+
+fviz_nbclust(num_scaled, kmeans, method = "silhouette") +
+  labs(title = "Silhouette Method: Optimal k")
+
+#K-means  K=3
+set.seed(123)
+km_3 <- kmeans(num_scaled, centers = 3, nstart = 25)
+pharma$Cluster3 <- as.factor(km_3$cluster)
+
+#Add descriptive labels 
+
+pharma <- pharma %>%
+  mutate(Cluster3_Label = case_when(
+    Cluster3 == 1 ~ "High PE Speculative",
+    Cluster3 == 2 ~ "Established Leaders",
+    Cluster3 == 3 ~ "Undervalued Challengers"
+  ))
+
+#Plot Cluster Results
+
+fviz_cluster(list(data = num_scaled, cluster = pharma$Cluster3_Label)) +
+  labs(title = "k-Means Cluster Plot with Descriptive Cluster Names")
+
+#Summarize clusters k=3
+summary_3 <- pharma %>%
+  group_by(Cluster3_Label) %>%
+  summarise(across(Market_Cap:Net_Profit_Margin, mean, .names = "mean_{.col}"))
+print(summary_3)
+
+#explore with K=5
+set.seed(123)
+km_5 <- kmeans(num_scaled, centers = 5, nstart = 25)
+pharma$Cluster5 <- as.factor(km_5$cluster)
+
+summary_5 <- pharma %>%
+  group_by(Cluster5) %>%
+  summarise(across(Market_Cap:Net_Profit_Margin, mean, .names = "mean_{.col}"))
+print(summary_5)
+
+#Analyze Categorical relationships
+table(pharma$Cluster3, pharma$Median_Recommendation)
+table(pharma$Cluster3, pharma$Location)
+table(pharma$Cluster3, pharma$Exchange)
+
+#Plot Median Recommendation by cluster
+ggplot(pharma, aes(x = Cluster3_Label, fill = Median_Recommendation)) +
+  geom_bar(position = "fill") +
+  labs(title = "Named Clusters vs. Median Recommendation", 
+       y = "Proportion", x = "Cluster") +
+  theme_minimal()
+
+#Plot Exchange by Cluster
+ggplot(pharma, aes(x = Cluster3_Label, fill = Exchange)) +
+  geom_bar(position = "fill") +
+  labs(title = "Named Clusters vs. Exchange", 
+       y = "Proportion", x = "Cluster") +
+  theme_minimal()
+
+#additional exploration : using Manhattan Distance 
+
+num_matrix <- as.matrix(num_scaled)
+km_manhattan <- kcca(num_matrix, k = 3, family = kccaFamily("kmeans", dist = "manhattan"))
+pharma$Cluster_Manhattan <- as.factor(predict(km_manhattan))
+
+#compare clusters
+table(pharma$Cluster3_Label, pharma$Cluster_Manhattan)
+
+#plot Manhattan clustering 
+print(
+  fviz_cluster(
+    list(data = num_scaled, cluster = predict(km_manhattan)),
+    geom = "point"
+  ) +
+    labs(title = "k-Means Cluster Plot (Manhattan Distance, k = 3)")
+)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+

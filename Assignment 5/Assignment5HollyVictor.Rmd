@@ -1,0 +1,117 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+
+#------Load Librarys,data and prepocess to omit missing values
+library("tidyverse")
+library("stats")
+library("cluster")
+library ("factoextra")
+
+cereals<-read.csv("/Users/hollyvictor/Desktop/Cereals.csv")
+cereals<-na.omit(cereals)
+
+#----- Normalize the Data 
+numeric_cereals<-cereals %>% select(where(is.numeric))
+scaled_cereals<-scale(numeric_cereals)
+
+#------Apply Hierarchial clustering using Agnes
+agnes_single   <- agnes(scaled_cereals, method = "single")
+agnes_complete <- agnes(scaled_cereals, method = "complete")
+agnes_average  <- agnes(scaled_cereals, method = "average")
+agnes_ward     <- agnes(scaled_cereals, method = "ward")
+
+agnes_single$ac
+agnes_complete$ac
+agnes_average$ac
+agnes_ward$ac
+
+ 
+#-----Visualize Dendogram and Choose Number of Clusters
+pltree(agnes_ward, cex = 0.6, hang = -1, main = "Dendrogram - Ward Linkage")
+rect.hclust(as.hclust(agnes_ward), k = 3, border = 2:5)
+
+#Silhouette Analysis to Justify k = 3
+library(factoextra)
+
+# Silhouette method to help choose optimal k
+fviz_nbclust(scaled_cereals, FUN = hcut, method = "silhouette", k.max = 6)
+
+# Visualize silhouette for k = 3
+hclust_ward <- hcut(scaled_cereals, k = 3, hc_method = "ward.D2")
+fviz_silhouette(hclust_ward)
+# Visualize silhouette for k = 4
+hclust_ward_k4 <- hcut(scaled_cereals, k = 4, hc_method = "ward.D2")
+fviz_silhouette(hclust_ward_k4)
+
+#-----Evaluate Cluster Stability
+set.seed(42)
+rows <- nrow(scaled_cereals)
+idx <- sample(1:rows, size = floor(rows/2))
+partA <- scaled_cereals[idx, ]
+partB <- scaled_cereals[-idx, ]
+
+#----Cluster partition A
+agnes_A <- agnes(partA, method = "ward")
+clust_A <- cutree(as.hclust(agnes_A), k = 3)
+
+#----Calculate Centroids from A
+centroids<-aggregate(partA,by=list(cluster=clust_A),mean)[-1]
+
+#Assign Part B to nearest centroid
+assign_cluster <- function(obs, centers) {
+  apply(centers, 1, function(center) sum((obs - center)^2)) %>% which.min()
+}
+assigned_B <- apply(partB, 1, assign_cluster, centers = centroids)
+
+full_clusters <- cutree(as.hclust(agnes_ward), k = 3)
+
+#-----Optional Consistency Check
+mean(assigned_B == full_clusters[-idx])
+
+#-----Optional Consistency Check for k = 4
+# Evaluate cluster stability for k = 4
+agnes_A_k4 <- agnes(partA, method = "ward")
+clust_A_k4 <- cutree(as.hclust(agnes_A_k4), k = 4)
+
+# Calculate centroids for k = 4
+centroids_k4 <- aggregate(partA, by = list(cluster = clust_A_k4), mean)[-1]
+
+# Assign Part B to nearest centroid using k = 4
+assigned_B_k4 <- apply(partB, 1, assign_cluster, centers = centroids_k4)
+
+# Compare with full clustering using k = 4
+full_clusters_k4 <- cutree(as.hclust(agnes_ward), k = 4)
+
+# Stability score for k = 4
+mean(assigned_B_k4 == full_clusters_k4[-idx])
+
+
+
+#-----Identify the Healthy Cereal Cluster
+cereal_clusters <- cutree(as.hclust(agnes_ward), k = 3)
+cereals$Cluster <- cereal_clusters
+
+aggregate(cereals[, c("sugars", "fiber", "calories", "rating")],
+          by = list(Cluster = cereals$Cluster), FUN = mean)
+
+
+
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
